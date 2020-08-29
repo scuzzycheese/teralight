@@ -1,24 +1,27 @@
 #![feature(proc_macro_hygiene, decl_macro)]
 
-#[macro_use]
-extern crate log;
+#[macro_use] extern crate log;
 extern crate log4rs;
 
+#[macro_use] extern crate lazy_static;
+
+#[macro_use] extern crate serde_derive;
 #[macro_use] extern crate rocket;
-#[macro_use]
-extern crate lazy_static;
+#[macro_use] extern crate rocket_contrib;
 
 use std::time::Duration;
 use serialport::{SerialPortSettings, DataBits, FlowControl, Parity, StopBits, SerialPort};
 use std::ops::Add;
-use crc16::*;
+use crc16::State as CRCState;
 use std::io::Read;
 use crate::error::*;
 use crate::data::holder::Holder;
-use rocket::response::content::Json;
 use std::sync::{Arc, Mutex};
 use crate::data::types::qpigs::QPIGS;
+use std::thread;
 
+use rocket::State;
+use rocket_contrib::json::{Json, JsonValue};
 
 
 #[cfg(target_os="macos")]
@@ -37,16 +40,22 @@ pub mod data;
 
 
 
-// #[get("/")]
-// fn index() -> &'static str {
-//     "Hello, world!"
-// }
-//
-//
-// #[get("/status")]
-// fn status() -> Json<QPIGS> {
-//
-// }
+#[get("/")]
+fn index() -> &'static str {
+    "Hello, world!"
+}
+
+
+#[get("/status", format = "json")]
+fn status() -> Option<Json<QPIGS>> {
+    match Holder::get_qpigs() {
+        Some(qpigs) => {
+            Some(Json(qpigs))
+        },
+        None => None
+    }
+}
+
 
 fn main() {
     log4rs::init_file(LOG_FILE_CONFIG, Default::default()).unwrap();
@@ -67,26 +76,44 @@ fn main() {
     };
 
 
+    thread::spawn(move || {
+        poll_and_update(&mut port);
+    });
 
-    // rocket::ignite().mount("/", routes![index]).launch();
+
+    rocket::ignite().mount("/", routes![index, status]).launch();
 
 
-    //Build the command to send to the inverter
-    let command = build_command("QPIGS");
 
-    //Write that command to the inverter
-    write_command(&mut port, command);
-
-    //Read the result
-    let response = read_result(&mut port);
-
-    let qpigs = QPIGS::new_from_string(&String::from_utf8_lossy(&response));
-    info!("QPIGS: {:?}", qpigs);
-
-    println!("Response: {}", String::from_utf8_lossy(&response));
 
 
 }
+
+fn poll_and_update(port: &mut Box<dyn SerialPort>) {
+    loop {
+        //Build the command to send to the inverter
+        let command = build_command("QPIGS");
+
+        //Write that command to the inverter
+        write_command(port, command);
+
+        //Read the result
+        let response = read_result(port);
+
+        let qpigs = match QPIGS::new_from_string(&String::from_utf8_lossy(&response)) {
+            Ok(qp) => {
+                Holder::set_qpigs(qp.clone());
+                trace!("QPIGS: {:?}", &qp);
+                qp
+            },
+            Err(e) => {
+                error!("Error marshalling response to structure: {}", e);
+                continue;
+            }
+        };
+    }
+}
+
 
 fn write_command(port: &mut Box<dyn SerialPort>, command: Vec<u8>) -> Result<usize, Error> {
     let bytes_written = port.write(command.as_slice())?;
@@ -121,7 +148,7 @@ fn read_result(port: &mut Box<dyn SerialPort>) -> [u8; 1000] {
 
 fn build_command(command: &str) -> Vec<u8> {
     let mut command: Vec<u8> = String::from(command).into_bytes();
-    let crc_16 = State::<XMODEM>::calculate(command.as_slice());
+    let crc_16 = CRCState::<crc16::XMODEM>::calculate(command.as_slice());
 
     let crc = unsafe {
         std::mem::transmute::<u16, [u8; 2]>(crc_16)

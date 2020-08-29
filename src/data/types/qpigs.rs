@@ -1,6 +1,7 @@
 use crate::error::Error;
 
 #[derive(Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize)]
 pub struct QPIGS {
     ac_input_voltage: f32,
     ac_input_frequency: f32,
