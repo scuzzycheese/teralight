@@ -3,22 +3,22 @@ use crate::error::Error;
 #[derive(Debug, Clone, Copy)]
 #[derive(Serialize, Deserialize)]
 pub struct QPIGS {
-    ac_input_voltage: f32,
-    ac_input_frequency: f32,
-    ac_output_voltage: f32,
-    ac_output_frequency: f32,
-    ac_output_va: usize,
-    ac_output_watts: usize,
-    load_percent: usize,
-    bus_voltage: usize,
-    battery_voltage: f32,
-    battery_charging_current: usize,
-    battery_capacity_percent: usize,
-    inverter_heatsink_temp: usize,
-    pv_input_current: usize,
-    pv_input_voltage: f32,
-    battery_voltage_from_scc: f32,
-    battery_discharge_current: usize,
+    pub ac_input_voltage: f32,
+    pub ac_input_frequency: f32,
+    pub ac_output_voltage: f32,
+    pub ac_output_frequency: f32,
+    pub ac_output_va: usize,
+    pub ac_output_watts: usize,
+    pub load_percent: usize,
+    pub bus_voltage: usize,
+    pub battery_voltage: f32,
+    pub battery_charging_current: usize,
+    pub battery_capacity_percent: usize,
+    pub inverter_heatsink_temp: usize,
+    pub pv_input_current: usize,
+    pub pv_input_voltage: f32,
+    pub battery_voltage_from_scc: f32,
+    pub battery_discharge_current: usize,
     //There are more, but nore sure what they are yet
 }
 

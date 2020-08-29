@@ -46,7 +46,7 @@ fn index() -> &'static str {
 }
 
 
-#[get("/status", format = "json")]
+#[get("/status", format = "text/html")]
 fn status() -> Option<Json<QPIGS>> {
     match Holder::get_qpigs() {
         Some(qpigs) => {
@@ -80,6 +80,25 @@ fn main() {
         poll_and_update(&mut port);
     });
 
+    
+    Holder::set_qpigs(QPIGS {
+        ac_input_voltage: 0.0,
+        ac_input_frequency: 0.0,
+        ac_output_voltage: 0.0,
+        ac_output_frequency: 0.0,
+        ac_output_va: 0,
+        ac_output_watts: 0,
+        load_percent: 0,
+        bus_voltage: 0,
+        battery_voltage: 0.0,
+        battery_charging_current: 0,
+        battery_capacity_percent: 0,
+        inverter_heatsink_temp: 0,
+        pv_input_current: 0,
+        pv_input_voltage: 0.0,
+        battery_voltage_from_scc: 0.0,
+        battery_discharge_current: 0
+    });
 
     rocket::ignite().mount("/", routes![index, status]).launch();
 
@@ -111,6 +130,7 @@ fn poll_and_update(port: &mut Box<dyn SerialPort>) {
                 continue;
             }
         };
+        thread::sleep(Duration::from_secs(5));
     }
 }
 
