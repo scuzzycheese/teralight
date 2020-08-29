@@ -25,7 +25,7 @@ impl Holder {
 
     pub fn set_qpigs(input: QPIGS) {
         match QPIGS_HOLDER.write() {
-            Ok(qpigs_writer) => {
+            Ok(mut qpigs_writer) => {
                 *qpigs_writer = Some(input);
             },
             Err(e) => {
