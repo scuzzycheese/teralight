@@ -1,0 +1,18 @@
+[package]
+name = "teralight"
+version = "0.1.0"
+authors = ["Daine Mamacos <scuzzy@reverseorder.net>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "0.2", features = ["full"] }
+futures = "0.3"
+bytes = "0.5"
+serialport = "3.3"
+crc16 = "0.4"
+log = "0.4"
+log4rs = { version = "0.13", features = ["rolling_file_appender", "compound_policy", "size_trigger", "fixed_window_roller"] }
+rocket = "0.4.5"
+lazy_static = "1.0"
