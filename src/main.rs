@@ -80,24 +80,6 @@ fn main() {
     });
 
     
-    // Holder::set_qpigs(QPIGS {
-    //     ac_input_voltage: 0.0,
-    //     ac_input_frequency: 0.0,
-    //     ac_output_voltage: 0.0,
-    //     ac_output_frequency: 0.0,
-    //     ac_output_va: 0,
-    //     ac_output_watts: 0,
-    //     load_percent: 0,
-    //     bus_voltage: 0,
-    //     battery_voltage: 0.0,
-    //     battery_charging_current: 0,
-    //     battery_capacity_percent: 0,
-    //     inverter_heatsink_temp: 0,
-    //     pv_input_current: 0,
-    //     pv_input_voltage: 0.0,
-    //     battery_voltage_from_scc: 0.0,
-    //     battery_discharge_current: 0
-    // });
 
     rocket::ignite().mount("/", routes![index, status]).launch();
 
@@ -129,7 +111,7 @@ fn poll_and_update(port: &mut Box<dyn SerialPort>) {
                 continue;
             }
         };
-        thread::sleep(Duration::from_secs(5));
+        thread::sleep(Duration::from_secs(2));
     }
 }
 
@@ -177,7 +159,7 @@ fn build_command(command: &str) -> Vec<u8> {
     command.push(crc[0]);
     command.push(0x0d as u8);
 
-    println!("commnand: {:?}", command);
+    trace!("Command Built: {:?}", command);
 
     command
 }
