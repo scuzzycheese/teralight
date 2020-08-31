@@ -7,22 +7,17 @@ extern crate log4rs;
 
 #[macro_use] extern crate serde_derive;
 #[macro_use] extern crate rocket;
-#[macro_use] extern crate rocket_contrib;
 
 use std::time::Duration;
 use serialport::{SerialPortSettings, DataBits, FlowControl, Parity, StopBits, SerialPort};
-use std::ops::Add;
 use crc16::State as CRCState;
 use std::io::Read;
 use crate::error::*;
 use crate::data::holder::Holder;
-use std::sync::{Arc, Mutex};
 use crate::data::types::qpigs::QPIGS;
 use std::thread;
 
-use rocket::State;
-use rocket_contrib::json::{Json, JsonValue};
-use rocket::response::status::NoContent;
+use rocket_contrib::json::{Json};
 
 
 #[cfg(target_os="macos")]
@@ -89,28 +84,36 @@ fn main() {
 
 }
 
+
+
+fn fetch_and_update_qpigs(port: &mut Box<dyn SerialPort>) {
+
+    //Build the command to send to the inverter
+    let command = build_command("QPIGS");
+
+    //Write that command to the inverter
+    if let Err(e) = write_command(port, command) {
+        error!("Unable to write command to the serial port: {}", e);
+    };
+
+    //Read the result
+    let response = read_result(port);
+
+    match QPIGS::new_from_string(&String::from_utf8_lossy(&response)) {
+        Ok(qp) => {
+            trace!("QPIGS: {:?}", &qp);
+            Holder::set_qpigs(qp);
+        },
+        Err(e) => {
+            error!("Error marshalling response to structure: {}", e);
+        }
+    }
+}
+
+
 fn poll_and_update(port: &mut Box<dyn SerialPort>) {
     loop {
-        //Build the command to send to the inverter
-        let command = build_command("QPIGS");
-
-        //Write that command to the inverter
-        write_command(port, command);
-
-        //Read the result
-        let response = read_result(port);
-
-        let qpigs = match QPIGS::new_from_string(&String::from_utf8_lossy(&response)) {
-            Ok(qp) => {
-                Holder::set_qpigs(qp.clone());
-                trace!("QPIGS: {:?}", &qp);
-                qp
-            },
-            Err(e) => {
-                error!("Error marshalling response to structure: {}", e);
-                continue;
-            }
-        };
+        fetch_and_update_qpigs(port);
         thread::sleep(Duration::from_secs(2));
     }
 }
