@@ -54,24 +54,11 @@ fn status() -> Option<Json<QPIGS>> {
 fn main() {
     log4rs::init_file(LOG_FILE_CONFIG, Default::default()).unwrap();
 
-    let mut port = match serialport::open_with_settings(TTY_DEV, &SerialPortSettings {
-        baud_rate: 2400,
-        data_bits: DataBits::Eight,
-        flow_control: FlowControl::Hardware,
-        parity: Parity::None,
-        stop_bits: StopBits::One,
-        timeout: Duration::from_millis(1000)
-    }) {
-        Ok(p) => p,
-        Err(e) => {
-            error!("Error, unable to open the serial port: {}", e);
-            panic!("Error, unable to open the serial port: {}", e);
-        }
-    };
 
 
+    //update the QPIGS data structure in a separate thread
     thread::spawn(move || {
-        poll_and_update(&mut port);
+        poll_and_update(TTY_DEV);
     });
 
     
@@ -111,9 +98,35 @@ fn fetch_and_update_qpigs(port: &mut Box<dyn SerialPort>) {
 }
 
 
-fn poll_and_update(port: &mut Box<dyn SerialPort>) {
+fn poll_and_update(port_device: &str) {
+
+    let mut port: Option<Box<dyn SerialPort>> = None;
+
     loop {
-        fetch_and_update_qpigs(port);
+        if let None = port {
+            port = match serialport::open_with_settings(port_device, &SerialPortSettings {
+                baud_rate: 2400,
+                data_bits: DataBits::Eight,
+                flow_control: FlowControl::Hardware,
+                parity: Parity::None,
+                stop_bits: StopBits::One,
+                timeout: Duration::from_millis(1000)
+            }) {
+                Ok(p) => Some(p),
+                Err(e) => {
+                    error!("Unable to open the serial port: {}", e);
+                    None
+                }
+            };
+        }
+
+        match port {
+            Some(ref mut p) => fetch_and_update_qpigs(p),
+            None => {
+                error!("Serial port is not initialised.");
+            }
+        }
+
         thread::sleep(Duration::from_secs(2));
     }
 }
@@ -138,7 +151,8 @@ fn read_result(port: &mut Box<dyn SerialPort>) -> [u8; 1000] {
         let bytes_read = match port.read(buf_slice) {
             Ok(br) => { counter += br; br },
             Err(e) => {
-                panic!("Failed to read bytes: {}", e);
+                error!("failed to read bytes from serial port: {}", e);
+                0
             }
         };
         trace!("Bytes read: {}", bytes_read);
@@ -162,7 +176,7 @@ fn build_command(command: &str) -> Vec<u8> {
     command.push(crc[0]);
     command.push(0x0d as u8);
 
-    trace!("Command Built: {:?}", command);
+    debug!("Command Built: {:?}", command);
 
     command
 }
