@@ -73,26 +73,26 @@ fn main() {
 
 
 
-fn fetch_and_update_qpigs(port: &mut Box<dyn SerialPort>) {
+fn fetch_and_update_qpigs(port: &mut Box<dyn SerialPort>) -> Result<(), Error> {
 
     //Build the command to send to the inverter
     let command = build_command("QPIGS");
 
     //Write that command to the inverter
-    if let Err(e) = write_command(port, command) {
-        error!("Unable to write command to the serial port: {}", e);
-    };
+    write_command(port, command)?;
 
     //Read the result
-    let response = read_result(port);
+    let response = read_result(port)?;
 
     match QPIGS::new_from_string(&String::from_utf8_lossy(&response)) {
         Ok(qp) => {
             trace!("QPIGS: {:?}", &qp);
             Holder::set_qpigs(qp);
+            Ok(())
         },
         Err(e) => {
             error!("Error marshalling response to structure: {}", e);
+            Err(Error::from(e))
         }
     }
 }
@@ -121,7 +121,13 @@ fn poll_and_update(port_device: &str) {
         }
 
         match port {
-            Some(ref mut p) => fetch_and_update_qpigs(p),
+            Some(ref mut p) => {
+                if let Err(e) = fetch_and_update_qpigs(p) {
+                    //Something went wrong, lets try again.
+                    error!("Something went wrong updating the inverter information: {}", e);
+                    port = None;
+                }
+            },
             None => {
                 error!("Serial port is not initialised.");
             }
@@ -139,7 +145,7 @@ fn write_command(port: &mut Box<dyn SerialPort>, command: Vec<u8>) -> Result<usi
 }
 
 //TODO: But a CRC check on the response
-fn read_result(port: &mut Box<dyn SerialPort>) -> [u8; 1000] {
+fn read_result(port: &mut Box<dyn SerialPort>) -> Result<[u8; 1000], Error> {
 
     let mut buf: [u8; 1000] = [0; 1000];
     let mut buf_slice = &mut buf[0..];
@@ -152,15 +158,14 @@ fn read_result(port: &mut Box<dyn SerialPort>) -> [u8; 1000] {
             Ok(br) => { counter += br; br },
             Err(e) => {
                 error!("failed to read bytes from serial port: {}", e);
-                0
+                return Err(Error::from(e));
             }
         };
         trace!("Bytes read: {}", bytes_read);
         trace!("Byte read: {}", buf_slice[0] as char);
     }
 
-    buf
-
+    Ok(buf)
 }
 
 
