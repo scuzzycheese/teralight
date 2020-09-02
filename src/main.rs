@@ -55,6 +55,25 @@ fn main() {
     log4rs::init_file(LOG_FILE_CONFIG, Default::default()).unwrap();
 
 
+    //Start with a blank version of the structure
+    Holder::set_qpigs(QPIGS {
+        ac_input_voltage: 0.0,
+        ac_input_frequency: 0.0,
+        ac_output_voltage: 0.0,
+        ac_output_frequency: 0.0,
+        ac_output_va: 0,
+        ac_output_watts: 0,
+        load_percent: 0,
+        bus_voltage: 0,
+        battery_voltage: 0.0,
+        battery_charging_current: 0,
+        battery_capacity_percent: 0,
+        inverter_heatsink_temp: 0,
+        pv_input_current: 0,
+        pv_input_voltage: 0.0,
+        battery_voltage_from_scc: 0.0,
+        battery_discharge_current: 0
+    });
 
     //update the QPIGS data structure in a separate thread
     thread::spawn(move || {
