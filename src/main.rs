@@ -18,6 +18,7 @@ use crate::data::types::qpigs::QPIGS;
 use std::thread;
 
 use rocket_contrib::json::{Json};
+use rocket_contrib::serve::StaticFiles;
 
 
 #[cfg(target_os="macos")]
@@ -34,12 +35,6 @@ static LOG_FILE_CONFIG: &'static str = "log4rs.yaml";
 pub mod error;
 pub mod data;
 
-
-
-#[get("/")]
-fn index() -> &'static str {
-    "Hello, world!"
-}
 
 
 #[get("/status")]
@@ -82,9 +77,10 @@ fn main() {
 
     
 
-    rocket::ignite().mount("/", routes![index, status]).launch();
-
-
+    rocket::ignite()
+        //.mount("/", StaticFiles::from("/home/pi/web"))
+        // .mount("/", StaticFiles::from("/Users/dainem/workspace/seelight/build/web"))
+        .mount("/api", routes![status]).launch();
 
 
 
