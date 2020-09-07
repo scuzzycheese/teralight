@@ -37,7 +37,7 @@ pub mod data;
 
 
 
-#[get("/status")]
+#[get("/status", rank = 20)]
 fn status() -> Option<Json<QPIGS>> {
     match Holder::get_qpigs() {
         Some(qpigs) => Some(Json(qpigs)),
@@ -78,8 +78,8 @@ fn main() {
     
 
     rocket::ignite()
-        //.mount("/", StaticFiles::from("/home/pi/web"))
-        // .mount("/", StaticFiles::from("/Users/dainem/workspace/seelight/build/web"))
+        .mount("/", StaticFiles::from("/home/pi/web").rank(30))
+        .mount("/key", StaticFiles::from("/home/pi/key").rank(20))
         .mount("/api", routes![status]).launch();
 
 
