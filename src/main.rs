@@ -79,11 +79,7 @@ fn main() {
 
     rocket::ignite()
         .mount("/", StaticFiles::from("/home/pi/web").rank(30))
-        .mount("/key", StaticFiles::from("/home/pi/key").rank(20))
         .mount("/api", routes![status]).launch();
-
-
-
 }
 
 
@@ -112,6 +108,52 @@ fn fetch_and_update_qpigs(port: &mut Box<dyn SerialPort>) -> Result<(), Error> {
     }
 }
 
+fn fetch_and_update_qpiws(port: &mut Box<dyn SerialPort>) -> Result<(), Error> {
+
+    //Build the command to send to the inverter
+    let command = build_command("QPIWS");
+
+    //Write that command to the inverter
+    write_command(port, command)?;
+
+    //Read the result
+    let response = read_result(port)?;
+
+    info!("QPIWS: {}", String::from_utf8_lossy(&response));
+
+    // match QPIGS::new_from_string(&String::from_utf8_lossy(&response)) {
+    //     Ok(qp) => {
+    //         trace!("QPIGS: {:?}", &qp);
+    //         Holder::set_qpigs(qp);
+    //         Ok(())
+    //     },
+    //     Err(e) => {
+    //         error!("Error marshalling response to structure: {}", e);
+    //         Err(Error::from(e))
+    //     }
+    // }
+
+    Ok(())
+
+}
+
+
+fn setup_port(port_device: &str) -> Option<Box<dyn SerialPort>> {
+    match serialport::open_with_settings(port_device, &SerialPortSettings {
+        baud_rate: 2400,
+        data_bits: DataBits::Eight,
+        flow_control: FlowControl::Hardware,
+        parity: Parity::None,
+        stop_bits: StopBits::One,
+        timeout: Duration::from_millis(1000)
+    }) {
+        Ok(sp) => Some(sp),
+        Err(e) => {
+            error!("Unable to open serial port: {}", e);
+            None
+        }
+    }
+}
 
 fn poll_and_update(port_device: &str) {
 
@@ -119,20 +161,7 @@ fn poll_and_update(port_device: &str) {
 
     loop {
         if let None = port {
-            port = match serialport::open_with_settings(port_device, &SerialPortSettings {
-                baud_rate: 2400,
-                data_bits: DataBits::Eight,
-                flow_control: FlowControl::Hardware,
-                parity: Parity::None,
-                stop_bits: StopBits::One,
-                timeout: Duration::from_millis(1000)
-            }) {
-                Ok(p) => Some(p),
-                Err(e) => {
-                    error!("Unable to open the serial port: {}", e);
-                    None
-                }
-            };
+            port = setup_port(port_device);
         }
 
         match port {
@@ -141,10 +170,17 @@ fn poll_and_update(port_device: &str) {
                     //Something went wrong, lets try again.
                     error!("Something went wrong updating the inverter information: {}", e);
                     port = None;
+                    continue;
+                }
+
+                if let Err(e) = fetch_and_update_qpiws(p) {
+                    error!("Something went wrong updating the inverter information: {}", e);
+                    port = None;
+                    continue;
                 }
             },
             None => {
-                error!("Serial port is not initialised.");
+                info!("Serial port not initialised.");
             }
         }
 
