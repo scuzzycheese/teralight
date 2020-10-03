@@ -161,20 +161,17 @@ fn fetch_and_update_qpiws(port: &mut Box<dyn SerialPort>) -> Result<(), Error> {
 
     info!("QPIWS: {}", String::from_utf8_lossy(&response));
 
-    // match QPIGS::new_from_string(&String::from_utf8_lossy(&response)) {
-    //     Ok(qp) => {
-    //         trace!("QPIGS: {:?}", &qp);
-    //         Holder::set_qpigs(qp);
-    //         Ok(())
-    //     },
-    //     Err(e) => {
-    //         error!("Error marshalling response to structure: {}", e);
-    //         Err(Error::from(e))
-    //     }
-    // }
-
-    Ok(())
-
+    match QPIWS::new_from_string(&String::from_utf8_lossy(&response)) {
+        Ok(qw) => {
+            trace!("QPIWS: {:?}", &qw);
+            Holder::set_qpiws(qw);
+            Ok(())
+        },
+        Err(e) => {
+            error!("Error marshalling response to structure: {}", e);
+            Err(Error::from(e))
+        }
+    }
 }
 
 
