@@ -10,14 +10,14 @@ appenders:
       pattern: "{d} - {m}{n}"
 
 root:
-  level: debug
+  level: info
   appenders:
     - stdout
     - application
 
 loggers:
   app:
-    level: debug
+    level: info
     appenders:
       - application
     additive: false

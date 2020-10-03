@@ -19,6 +19,7 @@ use std::thread;
 
 use rocket_contrib::json::{Json};
 use rocket_contrib::serve::StaticFiles;
+use crate::data::types::qpiws::QPIWS;
 
 
 #[cfg(target_os="macos")]
@@ -45,10 +46,17 @@ fn status() -> Option<Json<QPIGS>> {
     }
 }
 
+#[get("/errors_and_warnings", rank = 21)]
+fn errors_and_warnings() -> Option<Json<QPIWS>> {
+    match Holder::get_qpiws() {
+        Some(qpiws) => Some(Json(qpiws)),
+        None => None
+    }
+}
+
 
 fn main() {
     log4rs::init_file(LOG_FILE_CONFIG, Default::default()).unwrap();
-
 
     //Start with a blank version of the structure
     Holder::set_qpigs(QPIGS {
@@ -70,6 +78,38 @@ fn main() {
         battery_discharge_current: 0
     });
 
+
+    //TODO: Maybe each of these needs a ::default method
+    Holder::set_qpiws(QPIWS {
+        inverter_fault: false,
+        bus_over_fault: false,
+        bus_under_fault: false,
+        bus_soft_fail_fault: false,
+        line_fail_warning: false,
+        opv_short_warning: false,
+        inverter_voltage_too_low_fault: false,
+        inverter_voltage_too_high_fault: false,
+        over_temperature: false,
+        fan_locked: false,
+        battery_voltage_high: false,
+        battery_low_alarm_warning: false,
+        battery_under_shutdown_warning: false,
+        overload: false,
+        eeprom_fault_warning: false,
+        inverter_over_current_fault: false,
+        inverter_soft_fail_fault: false,
+        self_test_fail_fault: false,
+        op_dc_voltage_over_fault: false,
+        bat_open_fault: false,
+        current_sensor_fail_fault: false,
+        battery_short_fault: false,
+        power_limit_warning: false,
+        pv_voltage_high_warning: false,
+        mppt_overload_fault_1: false,
+        mppt_overload_warning_1: false,
+        battery_too_low_to_charge: false
+    });
+
     //update the QPIGS data structure in a separate thread
     thread::spawn(move || {
         poll_and_update(TTY_DEV);
@@ -79,7 +119,7 @@ fn main() {
 
     rocket::ignite()
         .mount("/", StaticFiles::from("/home/pi/web").rank(30))
-        .mount("/api", routes![status]).launch();
+        .mount("/api", routes![status, errors_and_warnings]).launch();
 }
 
 
