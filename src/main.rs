@@ -1,4 +1,5 @@
 #![feature(proc_macro_hygiene, decl_macro)]
+#![feature(with_options)]
 
 #[macro_use] extern crate log;
 extern crate log4rs;
@@ -11,7 +12,7 @@ extern crate log4rs;
 use std::time::Duration;
 use serialport::{SerialPortSettings, DataBits, FlowControl, Parity, StopBits, SerialPort};
 use crc16::State as CRCState;
-use std::io::Read;
+use std::io::{Read, Write};
 use crate::error::*;
 use crate::data::holder::Holder;
 use crate::data::types::qpigs::QPIGS;
@@ -20,12 +21,20 @@ use std::thread;
 use rocket_contrib::json::{Json};
 use rocket_contrib::serve::StaticFiles;
 use crate::data::types::qpiws::QPIWS;
+use std::fs::{File, OpenOptions};
 
 
 #[cfg(target_os="macos")]
 const TTY_DEV: &str = "/dev/tty.usbmodem141101";
+#[cfg(target_os="macos")]
+const RAW_HID: &str = "/dev/hidraw0";
 #[cfg(target_os="linux")]
 const TTY_DEV: &str = "/dev/ttyACM0";
+#[cfg(target_os="linux")]
+const RAW_HID: &str = "/dev/hidraw0";
+
+
+
 
 
 #[allow(dead_code)]
@@ -110,12 +119,35 @@ fn main() {
         battery_too_low_to_charge: false
     });
 
-    //update the QPIGS data structure in a separate thread
     thread::spawn(move || {
-        poll_and_update(TTY_DEV);
-    });
+        loop {
+            let command = build_command("QPIGS");
+            match fetch_command_data_usb(RAW_HID, command) {
+                Ok(data) => {
+                    if let Err(e) = update_qpigs(&data) {
+                        error!("Something went wrong updating the QPIGS information: {}", e);
+                    }
+                },
+                Err(e) => {
+                    error!("Error fetching data from the inverter: {}", e);
+                }
+            }
 
-    
+            let command = build_command("QPIWS");
+            match fetch_command_data_usb(RAW_HID, command) {
+                Ok(data) => {
+                    if let Err(e) = update_qpiws(&data) {
+                        error!("Something went wrong updating the QPIWS information: {}", e);
+                    }
+                },
+                Err(e) => {
+                    error!("Error fetching data from the inverter: {}", e);
+                }
+            }
+
+            thread::sleep(Duration::from_secs(2));
+        }
+    });
 
     rocket::ignite()
         .mount("/", StaticFiles::from("/home/pi/web").rank(30))
@@ -124,18 +156,8 @@ fn main() {
 
 
 
-fn fetch_and_update_qpigs(port: &mut Box<dyn SerialPort>) -> Result<(), Error> {
-
-    //Build the command to send to the inverter
-    let command = build_command("QPIGS");
-
-    //Write that command to the inverter
-    write_command(port, command)?;
-
-    //Read the result
-    let response = read_result(port)?;
-
-    match QPIGS::new_from_string(&String::from_utf8_lossy(&response)) {
+fn update_qpigs(data: &[u8]) -> Result<(), Error> {
+    match QPIGS::new_from_string(&String::from_utf8_lossy(data)) {
         Ok(qp) => {
             trace!("QPIGS: {:?}", &qp);
             Holder::set_qpigs(qp);
@@ -148,20 +170,8 @@ fn fetch_and_update_qpigs(port: &mut Box<dyn SerialPort>) -> Result<(), Error> {
     }
 }
 
-fn fetch_and_update_qpiws(port: &mut Box<dyn SerialPort>) -> Result<(), Error> {
-
-    //Build the command to send to the inverter
-    let command = build_command("QPIWS");
-
-    //Write that command to the inverter
-    write_command(port, command)?;
-
-    //Read the result
-    let response = read_result(port)?;
-
-    info!("QPIWS: {}", String::from_utf8_lossy(&response));
-
-    match QPIWS::new_from_string(&String::from_utf8_lossy(&response)) {
+fn update_qpiws(data: &[u8]) -> Result<(), Error> {
+    match QPIWS::new_from_string(&String::from_utf8_lossy(data)) {
         Ok(qw) => {
             trace!("QPIWS: {:?}", &qw);
             Holder::set_qpiws(qw);
@@ -175,74 +185,47 @@ fn fetch_and_update_qpiws(port: &mut Box<dyn SerialPort>) -> Result<(), Error> {
 }
 
 
-fn setup_port(port_device: &str) -> Option<Box<dyn SerialPort>> {
-    match serialport::open_with_settings(port_device, &SerialPortSettings {
-        baud_rate: 2400,
-        data_bits: DataBits::Eight,
-        flow_control: FlowControl::Hardware,
-        parity: Parity::None,
-        stop_bits: StopBits::One,
-        timeout: Duration::from_millis(1000)
-    }) {
-        Ok(sp) => Some(sp),
-        Err(e) => {
-            error!("Unable to open serial port: {}", e);
-            None
-        }
-    }
+// fn setup_port(port_device: &str) -> Option<Box<dyn SerialPort>> {
+//     match serialport::open_with_settings(port_device, &SerialPortSettings {
+//         baud_rate: 2400,
+//         data_bits: DataBits::Eight,
+//         flow_control: FlowControl::Hardware,
+//         parity: Parity::None,
+//         stop_bits: StopBits::One,
+//         timeout: Duration::from_millis(1000)
+//     }) {
+//         Ok(sp) => Some(sp),
+//         Err(e) => {
+//             error!("Unable to open serial port: {}", e);
+//             None
+//         }
+//     }
+// }
+
+
+
+
+fn fetch_command_data_usb(usb_file_name: &str, command: Vec<u8>) -> Result<[u8; 1000], Error> {
+    // let mut usb_file = File::open(usb_file_name)?;
+    let mut usb_file = File::with_options().write(true).read(true).open(usb_file_name)?;
+    write_command_usb(&mut usb_file, command)?;
+    read_result_usb(&mut usb_file)
 }
-
-fn poll_and_update(port_device: &str) {
-
-    let mut port: Option<Box<dyn SerialPort>> = None;
-
-    loop {
-        if let None = port {
-            port = setup_port(port_device);
-        }
-
-        match port {
-            Some(ref mut p) => {
-                if let Err(e) = fetch_and_update_qpigs(p) {
-                    //Something went wrong, lets try again.
-                    error!("Something went wrong updating the inverter information: {}", e);
-                    port = None;
-                    continue;
-                }
-
-                if let Err(e) = fetch_and_update_qpiws(p) {
-                    error!("Something went wrong updating the inverter information: {}", e);
-                    port = None;
-                    continue;
-                }
-            },
-            None => {
-                info!("Serial port not initialised.");
-            }
-        }
-
-        thread::sleep(Duration::from_secs(2));
-    }
+fn write_command_usb(usb_file: &mut File, command: Vec<u8>) -> Result<usize, Error> {
+    usb_file.write_all(command.as_slice())?;
+    debug!("Bytes writen to use device.");
+    Ok(command.len())
 }
-
-
-fn write_command(port: &mut Box<dyn SerialPort>, command: Vec<u8>) -> Result<usize, Error> {
-    let bytes_written = port.write(command.as_slice())?;
-    debug!("Bytes writen to serial port: {}", bytes_written);
-    Ok(bytes_written)
-}
-
-//TODO: But a CRC check on the response
-fn read_result(port: &mut Box<dyn SerialPort>) -> Result<[u8; 1000], Error> {
-
+fn read_result_usb(usb_file: &mut File) -> Result<[u8; 1000], Error> {
     let mut buf: [u8; 1000] = [0; 1000];
     let mut buf_slice = &mut buf[0..];
 
     let mut counter: usize = 0;
 
-    while buf_slice[0] as char != '\r' {
+    // while buf_slice[0] as char != '\r' {
+    while !buf_slice.contains( &('\r' as u8)) {
         buf_slice = &mut buf[counter..];
-        let bytes_read = match port.read(buf_slice) {
+        let bytes_read = match usb_file.read(buf_slice) {
             Ok(br) => { counter += br; br },
             Err(e) => {
                 error!("failed to read bytes from serial port: {}", e);
@@ -252,9 +235,38 @@ fn read_result(port: &mut Box<dyn SerialPort>) -> Result<[u8; 1000], Error> {
         trace!("Bytes read: {}", bytes_read);
         trace!("Byte read: {}", buf_slice[0] as char);
     }
-
     Ok(buf)
 }
+
+// fn write_command_serial(port: &mut Box<dyn SerialPort>, command: Vec<u8>) -> Result<usize, Error> {
+//     let bytes_written = port.write(command.as_slice())?;
+//     debug!("Bytes writen to serial port: {}", bytes_written);
+//     Ok(bytes_written)
+// }
+
+//TODO: But a CRC check on the response
+// fn read_result_serial(port: &mut Box<dyn SerialPort>) -> Result<[u8; 1000], Error> {
+//
+//     let mut buf: [u8; 1000] = [0; 1000];
+//     let mut buf_slice = &mut buf[0..];
+//
+//     let mut counter: usize = 0;
+//
+//     while buf_slice[0] as char != '\r' {
+//         buf_slice = &mut buf[counter..];
+//         let bytes_read = match port.read(buf_slice) {
+//             Ok(br) => { counter += br; br },
+//             Err(e) => {
+//                 error!("failed to read bytes from serial port: {}", e);
+//                 return Err(Error::from(e));
+//             }
+//         };
+//         trace!("Bytes read: {}", bytes_read);
+//         trace!("Byte read: {}", buf_slice[0] as char);
+//     }
+//
+//     Ok(buf)
+// }
 
 
 fn build_command(command: &str) -> Vec<u8> {
