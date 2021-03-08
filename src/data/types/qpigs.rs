@@ -19,6 +19,7 @@ pub struct QPIGS {
     pub pv_input_voltage: f32,
     pub battery_voltage_from_scc: f32,
     pub battery_discharge_current: usize,
+    pub pv_charging_power: usize,
     //There are more, but nore sure what they are yet
 }
 
@@ -46,7 +47,8 @@ impl QPIGS {
             pv_input_current: parts[12].parse::<usize>()?,
             pv_input_voltage: parts[13].parse::<f32>()?,
             battery_voltage_from_scc: parts[14].parse::<f32>()?,
-            battery_discharge_current: parts[15].parse::<usize>()?
+            battery_discharge_current: parts[15].parse::<usize>()?,
+            pv_charging_power: parts[19].parse::<usize>()?
         })
     }
 }

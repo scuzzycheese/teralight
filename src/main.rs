@@ -84,7 +84,8 @@ fn main() {
         pv_input_current: 0,
         pv_input_voltage: 0.0,
         battery_voltage_from_scc: 0.0,
-        battery_discharge_current: 0
+        battery_discharge_current: 0,
+        pv_charging_power: 0
     });
 
 
@@ -216,6 +217,9 @@ fn write_command_usb(usb_file: &mut File, command: Vec<u8>) -> Result<usize, Err
     debug!("Bytes writen to use device.");
     Ok(command.len())
 }
+
+
+//TODO: But a CRC check on the response
 fn read_result_usb(usb_file: &mut File) -> Result<[u8; 1000], Error> {
     let mut buf: [u8; 1000] = [0; 1000];
     let mut buf_slice = &mut buf[0..];
