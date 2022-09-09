@@ -1,7 +1,3 @@
-#![feature(proc_macro_hygiene, decl_macro)]
-#![feature(with_options)]
-
-#[macro_use] extern crate log;
 extern crate log4rs;
 
 #[macro_use] extern crate lazy_static;
@@ -10,7 +6,6 @@ extern crate log4rs;
 #[macro_use] extern crate rocket;
 
 use std::time::Duration;
-use serialport::{SerialPortSettings, DataBits, FlowControl, Parity, StopBits, SerialPort};
 use crc16::State as CRCState;
 use std::io::{Read, Write};
 use crate::error::*;
@@ -18,12 +13,12 @@ use crate::data::holder::Holder;
 use crate::data::types::qpigs::QPIGS;
 use std::thread;
 
-use rocket_contrib::json::{Json};
-use rocket_contrib::serve::StaticFiles;
+use rocket::serde::json::Json;
 use crate::data::types::qpiws::QPIWS;
 use std::fs::{File, OpenOptions};
 
 
+#[allow(dead_code)]
 #[cfg(target_os="macos")]
 const TTY_DEV: &str = "/dev/tty.usbmodem141101";
 #[cfg(target_os="macos")]
@@ -64,7 +59,8 @@ fn errors_and_warnings() -> Option<Json<QPIWS>> {
 }
 
 
-fn main() {
+#[launch]
+fn rocket() -> _ {
     log4rs::init_file(LOG_FILE_CONFIG, Default::default()).unwrap();
 
     //Start with a blank version of the structure
@@ -150,9 +146,7 @@ fn main() {
         }
     });
 
-    rocket::ignite()
-        .mount("/", StaticFiles::from("/home/pi/web").rank(30))
-        .mount("/api", routes![status, errors_and_warnings]).launch();
+    rocket::build().mount("/api", routes![status, errors_and_warnings])
 }
 
 
@@ -208,7 +202,7 @@ fn update_qpiws(data: &[u8]) -> Result<(), Error> {
 
 fn fetch_command_data_usb(usb_file_name: &str, command: Vec<u8>) -> Result<[u8; 1000], Error> {
     // let mut usb_file = File::open(usb_file_name)?;
-    let mut usb_file = File::with_options().write(true).read(true).open(usb_file_name)?;
+    let mut usb_file = OpenOptions::new().write(true).read(true).open(usb_file_name)?;
     write_command_usb(&mut usb_file, command)?;
     read_result_usb(&mut usb_file)
 }
